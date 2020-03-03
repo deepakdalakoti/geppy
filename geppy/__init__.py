@@ -59,7 +59,7 @@ except ImportError:
 
 try:
     import sympy
-    from geppy.support.simplification import simplify
+    from geppy.support.simplification import simplify, simplify_kexpression_plasmids
 except ImportError:
     _print_module_not_found('sympy', 'geepy.simplify', 'http://www.sympy.org/')
 

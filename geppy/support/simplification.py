@@ -8,7 +8,7 @@ be used in postprocessing.
 import math
 import operator
 from ..core.entity import KExpression, Chromosome, Gene
-from ..core.symbol import Function, Terminal, SymbolTerminal
+from ..core.symbol import Function, Terminal, SymbolTerminal, PlasmidTerminalType
 
 import sympy as sp
 
@@ -43,8 +43,6 @@ Currently, it is defined as::
         math.log.__name__: sp.log
     }
 """
-
-
 def _simplify_kexpression(expr, symbolic_function_map):
     """
     Simplify a K-expression.
@@ -52,6 +50,7 @@ def _simplify_kexpression(expr, symbolic_function_map):
     """
     assert len(expr) > 0
     if len(expr) == 1: # must be a single terminal
+        print(expr[0])
         t = expr[0]
         assert isinstance(t, Terminal), 'A K-expression of length 1 must only contain a terminal.'
         if t.value is None:  # an input
@@ -59,6 +58,7 @@ def _simplify_kexpression(expr, symbolic_function_map):
         return t.value
 
     expr = expr[:]  # because we need to change expr
+    
     # K-expression is simply a level-order serialization of an expression tree.
     for i in reversed(range(len(expr))):
         p = expr[i]
@@ -82,6 +82,23 @@ def _simplify_kexpression(expr, symbolic_function_map):
             r = sym_func(*reversed(args))
             expr[i] = sp.simplify(r)
     return expr[0]
+
+def simplify_kexpression_plasmids(expr2, symbolic_function_map):
+    """
+    Simplify a K-expression.
+    :return: a symbolic expression
+    """
+    expr_g = _simplify_kexpression(expr2[2:],symbolic_function_map)
+    expr_p = _simplify_kexpression(expr2[1].value.kexpression,symbolic_function_map)
+    expr = []
+    expr.append(expr2[0])
+    expr.append(expr_g)
+    expr.append(expr_p)
+    
+
+    return _simplify_kexpression(expr,symbolic_function_map)
+
+
 
 
 def simplify(genome, symbolic_function_map=None):
@@ -115,14 +132,20 @@ def simplify(genome, symbolic_function_map=None):
     if symbolic_function_map is None:
         symbolic_function_map = DEFAULT_SYMBOLIC_FUNCTION_MAP
     if isinstance(genome, KExpression):
-        return _simplify_kexpression(genome, symbolic_function_map)
+#        return _simplify_kexpression(genome, symbolic_function_map)
+        return simplify_kexpression_plasmids(genome, symbolic_function_map)
+
     elif isinstance(genome, Gene):
         return _simplify_kexpression(genome.kexpression, symbolic_function_map)
     elif isinstance(genome, Chromosome):
         if len(genome) == 1:
-            return _simplify_kexpression(genome[0].kexpression, symbolic_function_map)
+#            return _simplify_kexpression(genome[0].kexpression, symbolic_function_map)
+            return simplify_kexpression_plasmids(genome[0].kexpression, symbolic_function_map)
+
         else:   # multigenic chromosome
-            simplified_exprs = [_simplify_kexpression(g.kexpression, symbolic_function_map) for g in genome]
+#            simplified_exprs = [_simplify_kexpression(g.kexpression, symbolic_function_map) for g in genome]
+            simplified_exprs = [simplify_kexpression_plasmids(g.kexpression, symbolic_function_map) for g in genome]
+
             # combine these sub-expressions into a single one with the linking function
             try:
                 linker = symbolic_function_map[genome.linker.__name__]

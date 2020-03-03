@@ -12,7 +12,7 @@ from multiple genes into a single result.
 """
 import copy
 from ..tools.generator import *
-from ..core.symbol import Function, RNCTerminal, Terminal
+from ..core.symbol import Function, RNCTerminal, Terminal, PlasmidTerminal, PlasmidTerminalType
 
 
 _DEBUG = False
@@ -434,6 +434,388 @@ class GeneDc(Gene):
 
     def __repr__(self):
         return super().__repr__() + ', rnc_array=[' + ', '.join(str(num) for num in self.rnc_array) + ']'
+
+class GenePlasmid(Gene):
+    """
+    Class represents a gene with an additional Dc domain to handle numerical constants in GEP.
+
+    The basic :class:`Gene`
+    has two domains, a head and a tail, while this :class:`GeneDc` class introduces another domain called *Dc*
+    after the tail. The length of the Dc domain is equal to the length of the tail domain. The Dc domain only stores
+    the indices of numbers present in a separate array :meth:`rnc_array`, which collects a group of candidate
+    random numerical constants (RNCs). Thus, each :class:`GeneDc` instance comes with a *rnc_array*, which are
+    generally different among different instances.
+
+    In addition to the operators of the basic gene expression algorithm (mutation, inversion, transposition, and
+    recombination), Dc-specific operators in GEP-RNC are also created to better evolve the Dc domain and to manipulate
+    the attached set of constants *rnc_array*. Such operators are all suffixed with '_dc' in
+    :mod:`~geppy.tools.crossover` and :mod:`~geppy.tools.mutation` modules, for example, the method
+    :func:`~geppy.tools.mutation.invert_dc`.
+
+    The *rnc_array* associated with each :class:`GeneDc` instance can be provided explicitly when creating
+    a :class:`GeneDc` instance. See :meth:`from_genome`. Or more generally, a
+    random number generator *rnc_gen* can be provided, with which a specified number of RNCs are generated during the
+    creation of gene instances.
+
+    A special terminal of type :class:`~geppy.core.symbol.TerminalRNC` is used internally to represent the RNCs.
+
+    .. note::
+        To create an effective :class:`GeneDc` gene, the primitive set should contain at least one
+        :class:`~geppy.core.symbol.TerminalRNC` terminal. See :meth:`~geppy.core.symbol.PrimitiveSet.add_rnc`
+        for details.
+
+    Refer to Chapter 5 of [FC2006]_ for more knowledge about GEP-RNC.
+    """
+    def __init__(self, pset, head_length, rnc_gen, rnc_array_length, pset_plasmid, head_plasmid, n_plasmid):
+        """
+        Initialize a gene with a Dc domain.
+
+        :param head_length: length of the head domain
+        :param pset: a primitive set including functions and terminals for genome construction.
+        :param rnc_gen: callable, which should generate a random number when called by ``rnc_gen()``.
+        :param rnc_array_length: int, number of random numerical constant candidates associated with this gene,
+            usually 10 is enough
+
+        Supposing the maximum arity of functions in *pset* is *max_arity*, then the tail length is automatically
+        determined to be ``tail_length = head_length * (max_arity - 1) + 1``. The genome, i.e., list of symbols in
+        the instantiated gene is formed randomly from *pset*. The length of Dc domain is equal to *tail_length*, i.e.,
+        the tail domain and the Dc domain share the same length.
+        """
+        # first generate the gene without Dc
+        super().__init__(pset, head_length)
+        t = head_length * (pset.max_arity - 1) + 1
+        d = t
+        # complement it with a Dc domain
+        self._rnc_gen = rnc_gen
+        dc = generate_dc(rnc_array_length, dc_length=d)
+        self.extend(dc)
+        # generate the rnc array
+        self._rnc_array = [self._rnc_gen() for _ in range(rnc_array_length)]
+        # Add plasmid
+        dc_plasmid = generate_dc(n_plasmid, n_plasmid)      
+        self.extend(dc_plasmid)
+        self._n_plasmid = n_plasmid 
+        self._plasmid_const = dc_plasmid
+        self._head_plasmid = head_plasmid
+        self._tail_plasmid = head_plasmid*(pset_plasmid.max_arity-1) + 1
+        #self._plasmid_array = [generate_genome(pset_plasmid, head_plasmid) for _ in range(n_plasmid)]
+        #self._plasmid_array = [Gene(pset_plasmid, head_plasmid) for _ in range(n_plasmid)]
+        self._plasmid_array = [GeneDc(pset_plasmid, head_plasmid,rnc_gen,rnc_array_length) for _ in range(n_plasmid)]
+
+
+        
+       
+        
+
+    @classmethod
+    def from_genome(cls, genome, head_length, rnc_array, plasmid_array):
+        """
+        Build a gene directly from the given *genome* and the random numerical constant (RNC) array *rnc_array*.
+
+        :param genome: iterable, a list of symbols representing functions and terminals (especially the special RNC
+            terminal of type :class:`~geppy.core.symbol.TerminalRNC`). This genome should have three
+            domains: head, tail and Dc. The Dc domain should be composed only of integers representing indices into the
+            *rnc_array*.
+        :param head_length: length of the head domain. The length of the tail and Dc domain should follow the rule and
+            can be determined from the head_length: ``dc_length = tail_length = (len(genome) - head_length) / 2``.
+        :param rnc_array: the RNC array associated with the gene, which contains random constant candidates
+        :return: :class:`GeneDc`, a gene
+        """
+        g = super().from_genome(genome, head_length)  # the genome is copied and the head-length is fixed
+        g._rnc_array = copy.deepcopy(rnc_array)
+        g._plasmid_array = copy.deepcopy(plasmid_array)
+        return g
+
+    @property
+    def dc_length(self):
+        """
+        Get the length of the Dc domain, which is equal to :meth:`GeneDc.tail_length`
+        """
+        return self.tail_length
+
+    @property
+    def plasmid_length(self):
+        """
+        Get the length of the Dc domain, which is equal to :meth:`GeneDc.tail_length`
+        """
+        return self._n_plasmid
+
+
+    @property
+    def plasmid_array(self):
+        """
+        Get the random numerical array (RNC) associated with this gene.
+        """
+        return self._plasmid_array
+
+
+    @property
+    def rnc_array(self):
+        """
+        Get the random numerical array (RNC) associated with this gene.
+        """
+        return self._rnc_array
+
+    @property
+    def tail_length(self):
+        """
+        Get the tail domain length.
+        """
+        return (len(self) - self.head_length -self.plasmid_length) // 2
+
+    @property
+    def max_arity(self):
+        """
+        Get the max arity of functions in the primitive set used to build this gene.
+        """
+        # determine from the head-tail-Dc length relations
+        return (len(self) - 2 + self.head_length-self._n_plasmid) // (2 * self.head_length)
+
+    @property
+    def dc(self):
+        """
+        Get the Dc domain of this gene.
+        :return:
+        """
+        return self[self.head_length + self.tail_length: self.head_length + self.tail_length + self.dc_length]
+    @property
+    def plasmid(self):
+        """
+        Get the Dc domain of this gene.
+        :return:
+        """
+        return self._plasmid_const
+        
+        #return self[self.head_length + self.tail_length+self.dc_length : self.head_length + self.tail_length + self.dc_length+self.plasmid_length]
+
+
+    # def __deepcopy__(self, memodict):
+    #     return self.__class__.from_genome(self, self.head_length, self.rnc_array)
+
+    def __str2__(self):
+        """
+        Return the expression in a human readable string, which is also a legal python code that can be evaluated.
+        The special terminal representing a RNC will be replaced by their true values retrieved from the array
+        :meth:`rnc_array`.
+
+        :return: string form of the expression
+        """
+        expr = self.kexpression
+        n_total_rncs = sum(1 if isinstance(p, RNCTerminal) else 0 for p in expr)  # how many RNCs in total?
+        n_total_plasmid = sum(1 if isinstance(p, PlasmidTerminal) else 0 for p in expr)  # how many RNCs in total?
+        n_encountered_rncs = 0  # how many RNCs we have encountered in reverse order?
+        n_encountered_plasmids = 0  # how many RNCs we have encountered in reverse order?
+
+        i = len(expr) - 1
+        while i >= 0:
+            if expr[i].arity > 0:  # a function
+                f = expr[i]
+                args = []
+                for _ in range(f.arity):
+                    ele = expr.pop()
+                    if isinstance(ele, str):
+                        args.append(ele)
+                    else:  # a terminal or a RNC terminal
+                        if isinstance(ele, RNCTerminal):
+                            # retrieve its true value
+                            which = n_total_rncs - n_encountered_rncs - 1
+                            index = self.dc[which]
+                            value = self.rnc_array[index]
+                            args.append(str(value))
+                            n_encountered_rncs += 1
+                        if isinstance(ele, PlasmidTerminal):
+                            # retrieve its true value
+                            which = n_total_plasmid - n_encountered_plasmids - 1
+                            # Recycle plasmids, make sure this is consistent with kexpressions below
+                            if(which > self.plasmid_length-1):
+                                 n_encountered_plasmids = 0                            
+                            index = self.plasmid[which]
+                            value = self.plasmid_array[index]
+                            args.append(str(value))
+                            n_encountered_plasmids += 1
+
+                        else:   # a normal terminal
+                            args.append(ele.format())
+                expr[i] = f.format(*reversed(args))  # replace the operator with its result (str)
+            i -= 1
+
+        # the final result is at the root
+        if isinstance(expr[0], str):
+            return expr[0]
+        if isinstance(expr[0], RNCTerminal):  # only contains a single RNC, let's retrieve its value
+            return str(self.rnc_array[self.dc[0]])
+        if isinstance(expr[0], PlasmidTerminal):  # only contains a single RNC, let's retrieve its value
+            return str(self.plasmid_array[self.plasmid[0]])
+
+        return expr[0].format()    # only contains a normal terminal
+
+    def __str__(self):
+        """
+        Return the expression in a human readable string, which is also a legal python code that can be evaluated.
+        The special terminal representing a RNC will be replaced by their true values retrieved from the array
+        :meth:`rnc_array`.
+
+        :return: string form of the expression
+        """
+        expr = self.kexpression
+        n_total_rncs = sum(1 if isinstance(p, RNCTerminal) else 0 for p in expr)  # how many RNCs in total?
+        n_encountered_rncs = 0  # how many RNCs we have encountered in reverse order?
+
+        i = len(expr) - 1
+        while i >= 0:
+            if expr[i].arity > 0:  # a function
+                f = expr[i]
+                args = []
+                for _ in range(f.arity):
+                    ele = expr.pop()
+                    if isinstance(ele, str):
+                        args.append(ele)
+                    else:  # a terminal or a RNC terminal
+                        if isinstance(ele, RNCTerminal):
+                            # retrieve its true value
+                            which = n_total_rncs - n_encountered_rncs - 1
+                            index = self.dc[which]
+                            value = self.rnc_array[index]
+                            args.append(str(value))
+                            n_encountered_rncs += 1
+                        if isinstance(ele, PlasmidTerminal):
+                            # retrieve its true value
+                            which = 0
+                            # Recycle plasmids, make sure this is consistent with kexpressions below
+                            #index = self.plasmid[which]
+                            value = self.plasmid_array[which]
+                            args.append(str(value))
+
+                        else:   # a normal terminal
+                            args.append(ele.format())
+                expr[i] = f.format(*reversed(args))  # replace the operator with its result (str)
+            i -= 1
+
+        # the final result is at the root
+        if isinstance(expr[0], str):
+            return expr[0]
+        if isinstance(expr[0], RNCTerminal):  # only contains a single RNC, let's retrieve its value
+            return str(self.rnc_array[self.dc[0]])
+        if isinstance(expr[0], PlasmidTerminal):  # only contains a single RNC, let's retrieve its value
+            return str(self.plasmid_array[0])
+
+        return expr[0].format()    # only contains a normal terminal
+
+    @property
+    def kexpression(self):
+        """
+        Get the K-expression of type :class:`KExpression` represented by this gene. The involved RNC terminal will be
+        replaced by a constant terminal with its value retrived from the :meth:`rnc_array` according to the GEP-RNC
+        algorithm.
+        """
+        n_rnc = 0
+
+        def convert_RNC(p):
+            nonlocal n_rnc
+            if isinstance(p, RNCTerminal):
+                index = self.dc[n_rnc]
+                value = self.rnc_array[index]
+                n_rnc += 1
+                t = Terminal(str(value), value)
+                return t
+            return p
+        # level-order
+        expr = KExpression([convert_RNC(self[0])])
+        i = 0
+        j = 1
+        while i < len(expr):
+            for _ in range(expr[i].arity):
+                out = convert_RNC(self[j])
+                if(isinstance(out,list)):
+                     expr.extend(out)
+                else:
+                     expr.append(out)
+                j += 1
+            i += 1
+        expr.insert(0,Function('mul',2))
+        expr.insert(1,PlasmidTerminalType(str(self.plasmid_array[0]), self.plasmid_array[0]))
+        return expr
+
+
+
+
+    @property
+    def kexpression2(self):
+        """
+        Get the K-expression of type :class:`KExpression` represented by this gene. The involved RNC terminal will be
+        replaced by a constant terminal with its value retrived from the :meth:`rnc_array` according to the GEP-RNC
+        algorithm.
+        """
+        n_rnc = 0
+        n_plasmid = 0
+
+        def convert_RNC(p):
+            nonlocal n_rnc
+            if isinstance(p, RNCTerminal):
+                index = self.dc[n_rnc]
+                value = self.rnc_array[index]
+                n_rnc += 1
+                t = Terminal(str(value), value)
+                return t
+            nonlocal n_plasmid
+            if isinstance(p, PlasmidTerminal):
+#                print("HERE")
+#                # Recycle plasmids beacause number of plasmids may not be same as the tail length
+                if(n_plasmid > self.plasmid_length-1):
+                      n_plasmid = 0                        
+                index = self.plasmid[n_plasmid]
+                value = self.plasmid_array[index]
+                n_plasmid += 1
+#                expr_plas = KExpression(value)
+#                expr_ret = []
+#                for i in range(len(expr_plas)):
+##                    expr_ret.append(expr_plas[i])
+                     
+                   
+                
+#                i=0
+#                j=1
+#                while i < len(expr_loc):
+#                    for _ in range(expr_loc[i].arity):
+#                       expr_loc.append(convert_RNC(self[j]))
+#                       j += 1
+#                    i += 1
+#                return expr_ret
+
+
+                t = PlasmidTerminalType(str(value), value) 
+#                t = value.kexpression
+                return t
+            return p
+#        def convert_plasmid(p):
+#            nonlocal n_plasmid
+#            if isinstance(p, PlasmidTerminal):
+#                index = self.plasmid[n_plasmid]
+#                value = self.plasmid_array[index]
+#                n_plasmid += 1
+#                t = Terminal(str(value), value)
+#                return t
+#            return p
+
+        # level-order
+        expr = KExpression([convert_RNC(self[0])])
+        i = 0
+        j = 1
+        while i < len(expr):
+            for _ in range(expr[i].arity):
+                out = convert_RNC(self[j])
+                if(isinstance(out,list)):
+                     expr.extend(out)
+                else:
+                     expr.append(out)
+                j += 1
+            i += 1
+        return expr
+
+    def __repr__(self):
+
+        return super().__repr__() + ', rnc_array=[' + ', '.join(str(num) for num in self.rnc_array) + ']' +  ', plasmid_array=[' + ', '+ str(self.plasmid_array) + ']'
+
 
 
 class Chromosome(list):

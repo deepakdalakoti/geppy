@@ -82,6 +82,75 @@ def mutate_uniform(individual, pset, ind_pb='2p'):
                 gene[i] = _choose_terminal(pset)
     return individual,
 
+def mutate_uniform_plasmid(individual, pset_plasmid, ind_pb='2p'):
+    """
+    Uniform point mutation. For each symbol (primitive) in *individual*, change it to another randomly chosen symbol
+    from *pset* with the probability *indpb*. A symbol may be a function or a terminal.
+
+    :param individual: :class:`~geppy.core.entity.Chromosome`, the chromosome to be mutated.
+    :param pset: :class:`~geppy.core.entity.PrimitiveSet`, a primitive set
+    :param ind_pb: float or str, default '2p'. Probability of mutating each symbol.
+        If *ind_pb* is given as a string ending with 'p',
+        then it indicates the expected number of point mutations among all the symbols in *individual*. For example,
+        if the total length of each gene of *individual* is `l` and there are `m` genes in total, then by passing
+        `ind_pb='1.5p'` we specify approximately `ind_pb=1.5/(l*m)`.
+    :return: A tuple of one chromosome
+
+    It is typical to set a mutation rate *indpb* equivalent to two one-point mutations per chromosome. That is,
+    ``indpb = 2 / len(chromosome) * len(gene)``.
+    """
+    if isinstance(ind_pb, str):
+        assert ind_pb.endswith('p'), "ind_pb must end with 'p' if given in a string form"
+        length = individual[0]._head_plasmid + individual[0]._tail_plasmid
+        ind_pb = float(ind_pb.rstrip('p')) / (len(individual) * length)
+    for gene in individual:
+       for plasmid in gene.plasmid_array:
+        # Only mutate the plasmid of the gene
+        # mutate the gene with the associated pset
+        # head: any symbol can be changed into a function or a terminal
+          for i in range(gene._head_plasmid):
+            if random.random() < ind_pb:
+                if random.random() < 0.5:  # to a function
+                    plasmid[i] = _choose_function(pset_plasmid)
+                else:
+                    plasmid[i] = _choose_terminal(pset_plasmid)
+        # tail: only change to another terminal
+          for i in range(plasmid.head_length, plasmid.head_length + plasmid.tail_length):
+            if random.random() < ind_pb:
+                plasmid[i] = _choose_terminal(pset_plasmid)
+    return individual,
+
+def mutate_move_plasmid(individual,ind_pb='1p'):
+    """
+    Uniform point mutation. For each symbol (primitive) in *individual*, change it to another randomly chosen symbol
+    from *pset* with the probability *indpb*. A symbol may be a function or a terminal.
+
+    :param individual: :class:`~geppy.core.entity.Chromosome`, the chromosome to be mutated.
+    :param pset: :class:`~geppy.core.entity.PrimitiveSet`, a primitive set
+    :param ind_pb: float or str, default '2p'. Probability of mutating each symbol.
+        If *ind_pb* is given as a string ending with 'p',
+        then it indicates the expected number of point mutations among all the symbols in *individual*. For example,
+        if the total length of each gene of *individual* is `l` and there are `m` genes in total, then by passing
+        `ind_pb='1.5p'` we specify approximately `ind_pb=1.5/(l*m)`.
+    :return: A tuple of one chromosome
+
+    It is typical to set a mutation rate *indpb* equivalent to two one-point mutations per chromosome. That is,
+    ``indpb = 2 / len(chromosome) * len(gene)``.
+    """
+    if isinstance(ind_pb, str):
+        assert ind_pb.endswith('p'), "ind_pb must end with 'p' if given in a string form"
+        ind_pb = float(ind_pb.rstrip('p')) / (len(individual) * individual[0]._n_plasmid)
+    for gene in individual:
+        start = gene.head_length + gene.tail_length + gene.dc_length
+        end = start + gene._n_plasmid
+        for i in range(start, end):
+            if random.random() < ind_pb:
+                gene[i] = random.randint(0, gene._n_plasmid - 1)
+
+    return individual,
+
+
+
 
 def mutate_uniform_dc(individual, ind_pb='1p'):
     """
@@ -154,7 +223,7 @@ def invert_dc(individual):
 
 
 def _choose_donor_donee(individual):
-    i1, i2 = random.choices(range(len(individual)), k=2)  # with replacement
+    i1, i2 = random.sample(range(len(individual)), k=2)  # with replacement
     return individual[i1], individual[i2], i1, i2
 
 
@@ -299,6 +368,42 @@ def mutate_rnc_array_dc(individual, rnc_gen, ind_pb='1p'):
             if random.random() < ind_pb:
                 g.rnc_array[i] = rnc_gen()
     return individual,
+
+def mutate_rnc_array_plasmid(individual, rnc_gen, ind_pb='1p'):
+    """
+    Direct mutation of RNCs, which changes the values in a gene's RNC array
+    :meth:`~geppy.core.entity.GeneDc.rnc_array` randomly.
+
+    :param individual: :class:`~geppy.core.entity.Chromosome`, a chromosome, which contains genes of type
+        :class:`~geppy.core.entity.GeneDc`.
+    :param rnc_gen: callable, which returns a random numerical constant by calling ``rnc_gen()``.
+    :param ind_pb: float or str, default '1p'. Use a float number to specify the probability of each RNC in the array
+        being mutated. Alternatively, if a str ending with 'p' is given in the form like 'xp',  where
+        'x' is a numerical number, then it specifies how many point mutations are expected for the RNC arrays
+        in *individual*. For example, if there are *d* RNCs inside the arrays in total in *individual*,
+        then '1.5p' is approximately equal to `ind_pb = 1.5 / d`.
+    :return: a tuple of one individual
+
+    The genetic operators :func:`mutate_uniform_dc`, :func:`transpose_dc` and :func:`invert_dc` actually only move the
+    random numerical constants around without generating new numerical values. This method :func:`mutate_rnc_array_dc`
+    can replace the value of a particular numerical constant by another in the
+    :meth:`~geppy.core.entity.GeneDc.rnc_array`.
+
+    Refer to section 5.4.4 of [FC2006]_ for more details.
+    """
+    if isinstance(ind_pb, str):
+        assert ind_pb.endswith('p'), "ind_pb must end with 'p' if given in a string form"
+        n_rnc_total = len(individual[0].rnc_array) * len(individual)
+        if n_rnc_total == 0:
+            return individual,
+        ind_pb = float(ind_pb.rstrip('p')) / n_rnc_total
+
+    for g in individual:
+        for i in range(len(g.plasmid_array[0].rnc_array)):
+            if random.random() < ind_pb:
+                g.plasmid_array[0].rnc_array[i] = rnc_gen()
+    return individual,
+
 
 
 def mutate_uniform_ephemeral(individual, ind_pb='1p'):

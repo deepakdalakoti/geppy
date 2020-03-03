@@ -170,6 +170,43 @@ class Terminal(Primitive):
     def __str__(self):
         return self.format()
 
+class PlasmidTerminalType(Primitive):
+    """
+    Class that encapsulates a terminal in GEP.
+    """
+
+    def __init__(self, name, value):
+        """
+        Initialize a terminal.
+
+        :param name: str, name of the terminal
+        :param value: value of the terminal
+        """
+        super().__init__(name, arity=0)
+        self._value = value
+
+    def format(self):
+        """
+        Get a string representation of this terminal for subsequent evaluation purpose, which may be a symbol or a
+        numeric string.
+
+        :return: str, a string representation
+        """
+        return self.name
+
+    @property
+    def value(self):
+        """
+        Get the value of this terminal.
+        """
+        return self._value
+
+    def __repr__(self):
+        return '{}(name={}, value={})'.format(self.__class__, self.name, self.value)
+
+    def __str__(self):
+        return self.format()
+
 
 class ConstantTerminal(Terminal):
     """
@@ -304,6 +341,26 @@ class RNCTerminal(Terminal):
         """
         super().__init__(name, value=None)
 
+class PlasmidTerminal(Terminal):
+    """
+    A special terminal, which is just a placeholder representing a random numerical constant (RNC) in the GEP-RNC
+    algorithm. This class is mainly used internally by the :class:`~geppy.core.entity.GeneDc` class. The name of a
+    :class:`RNCTerminal` object is '?' by default, and its value is retrieved dynamically according to the GEP-RNC
+    algorithm. Refer to Chapter 5 of [FC2006]_ for more details.
+
+    In *geppy* and the GEP-RNC algorithm, the RNC terminal is just a placeholder and the default name '?' is
+    recommended.
+    """
+
+    def __init__(self, name='plas'):
+        """
+        Initialize a plasmid terminal.
+
+        :param name: str, default '?', name of the terminal
+        """
+        super().__init__(name, value=None)
+
+
 
 class PrimitiveSet:
     """
@@ -437,6 +494,21 @@ class PrimitiveSet:
         RNC terminals at different positions are different random numerical constants..
         """
         self._terminals.append(RNCTerminal(name))
+    def add_plasmid_terminal(self, name='plas'):
+        """
+        Add a special terminal representing a random numerical constant (RNC), as defined in the GEP-RNC algorithm.
+        This terminal's value is retrieved dynamically from an RNC array attached to a gene of type
+        :class:`~geppy.core.entity.GeneDc` according to the GEP-RNC algorithm.
+        See also :class:`RNCTerminal` and refer to Chapter 5 of [FC2006]_ about GEP-RNC.
+
+        :param name: str, name of the terminal. For a RNC terminal, generally there is no need to specify a name and
+            the default value '?' is recommended.
+
+        Usually it is sufficient to call this method once to add only one RNC terminal, since the values of the
+        RNC terminals at different positions are different random numerical constants..
+        """
+        self._terminals.append(PlasmidTerminal(name))
+
 
     @property
     def functions(self):
