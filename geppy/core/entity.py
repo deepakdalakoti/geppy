@@ -682,9 +682,10 @@ class GenePlasmid(Gene):
                             # retrieve its true value
                             which = 0
                             # Recycle plasmids, make sure this is consistent with kexpressions below
-                            #index = self.plasmid[which]
+                            index = self.plasmid[which]
                             value = self.plasmid_array[which]
-                            args.append(str(value))
+                            args.append('trace('+str(value)+')')
+                            print("HERE")
 
                         else:   # a normal terminal
                             args.append(ele.format())
@@ -697,7 +698,8 @@ class GenePlasmid(Gene):
         if isinstance(expr[0], RNCTerminal):  # only contains a single RNC, let's retrieve its value
             return str(self.rnc_array[self.dc[0]])
         if isinstance(expr[0], PlasmidTerminal):  # only contains a single RNC, let's retrieve its value
-            return str(self.plasmid_array[0])
+            print("HERE1")
+            return 'trace('+str(self.plasmid_array[0])+')'
 
         return expr[0].format()    # only contains a normal terminal
 
@@ -709,7 +711,6 @@ class GenePlasmid(Gene):
         algorithm.
         """
         n_rnc = 0
-
         def convert_RNC(p):
             nonlocal n_rnc
             if isinstance(p, RNCTerminal):
@@ -733,7 +734,7 @@ class GenePlasmid(Gene):
                 j += 1
             i += 1
         expr.insert(0,Function('mul',2))
-        expr.insert(1,PlasmidTerminalType(str(self.plasmid_array[0]), self.plasmid_array[0]))
+        expr.insert(1,PlasmidTerminalType("trace("+str(self.plasmid_array[0])+")", self.plasmid_array[0]))
         return expr
 
 

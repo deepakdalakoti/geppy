@@ -10,7 +10,7 @@ lambda function in Python for subsequent fitness evaluation.
 """
 
 import sys
-
+import operator
 
 def _compile_gene(g, pset):
     """
@@ -47,6 +47,8 @@ def _compile_plasmid_gene(g, pset,pset_plasmid):
     try:
         globs = pset.globals
         globs.update(pset_plasmid.globals)
+# Here add mult function for linker because input set might not always have one
+        globs.update({'mul':operator.mul})
         return eval(code, globs, {})
     except MemoryError:
         _, _, traceback = sys.exc_info()
