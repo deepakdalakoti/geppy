@@ -51,3 +51,4 @@ def generate_dc(rnc_array_length, dc_length):
     """
     return [random.randint(0, rnc_array_length - 1) for _ in range(dc_length)]
 
+

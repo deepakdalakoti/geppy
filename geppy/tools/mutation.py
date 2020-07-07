@@ -12,6 +12,7 @@ transposition and inversion. Please refer to Chapter 3 of [FC2006]_ for more det
        :class:`~geppy.core.entity.GeneDc`.
 """
 import random
+import copy
 from ..core.symbol import Function, EphemeralTerminal
 from ._util import _choose_a_terminal
 
@@ -44,6 +45,59 @@ def _choose_subsequence_indices(i, j, min_length=1, max_length=-1):
     length = random.randint(min_length, max_length)
     start = random.randint(i, j - length + 1)
     return start, start + length - 1
+
+def mutate_uniform_new(individual, pset, ind_pb='2p'):
+    """
+    A modified version of the mutate uniform. In the old version it is hard to know how many mutations
+    actually occur per chromose. In this version, I make it such that you specify how many point mutations
+    happen per chromosome
+  
+    ind_pb will tell how many point mutations per chromomes 
+    """
+    #print("IN", [individual], individual)
+    for i in range(0,ind_pb):
+       if(random.random() < 0.5):
+
+           mloc = random.randint(0,individual[0].head_length-1)
+           if(random.random() < 0.5):
+	           individual[random.randint(0,len(individual)-1)][mloc] = _choose_function(pset)
+           else:
+	           individual[random.randint(0,len(individual)-1)][mloc] = _choose_terminal(pset)
+ 
+       else:
+           
+           mloc = random.randint(individual[0].head_length,individual[0].head_length+individual[0].tail_length-1)
+           individual[random.randint(0,len(individual)-1)][mloc] = _choose_terminal(pset)
+    #print("OUT",[individual], individual)
+    return individual,
+
+def mutate_uniform_gene_plasmid(individual, pset, pset_plasmid, ind_pb='2p'):
+    """
+    A modified version of the mutate uniform. In the old version it is hard to know how many mutations
+    actually occur per chromose. In this version, I make it such that you specify how many point mutations
+    happen per chromosome
+  
+    ind_pb will tell how many point mutations per chromomes 
+    """
+    for i in range(0,ind_pb):
+#   Select if you wanna change the plasmid or the main gene
+      
+       if(random.random() < 0.5):
+            individual, = mutate_uniform_new(individual,pset,1)
+       else:
+#  Only modify the plasmid which is being expressed           
+           ngene = random.randint(0,len(individual)-1)
+           nplasmid = individual[ngene][individual[ngene]._plasmid_start]
+           plasmid_gene = individual[ngene].plasmid_array[nplasmid]
+           chrom = [copy.deepcopy(plasmid_gene)]
+#           print([chrom],'p1')
+           chrom, = mutate_uniform_new(chrom,pset_plasmid,1)
+           individual[ngene].plasmid_array[nplasmid] = chrom[0]
+#           print([chrom], 'p2')
+    #print("OUT",[individual], individual)
+    return individual,
+
+
 
 
 def mutate_uniform(individual, pset, ind_pb='2p'):
@@ -178,6 +232,17 @@ def mutate_uniform_dc(individual, ind_pb='1p'):
         for i in range(start, end):
             if random.random() < ind_pb:
                 g[i] = random.randint(0, len(g.rnc_array) - 1)
+    return individual,
+
+def mutate_uniform_dc_new(individual, ind_pb=1):
+
+    ngen = random.randint(0,len(individual)-1)
+     
+    start = individual[0].head_length + individual[0].tail_length
+    end = start + individual[0].dc_length
+    for i in range(0, ind_pb):
+        mloc = random.randint(start,end-1)
+        individual[ngen][mloc] = random.randint(0, len(individual[0].rnc_array) - 1)
     return individual,
 
 

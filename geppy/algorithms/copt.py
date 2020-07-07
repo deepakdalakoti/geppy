@@ -32,4 +32,10 @@ def _hill_climbing(population, selector, generation, **kwargs):
 def gep_hill_climbing(population, toolbox, n_generations=100, n_elites=1,
             stats=None, hall_of_fame=None, verbose=__debug__,
             opt_period=30, opt_selector='best 10', max_step=1, rnc_gen=None):
+
+    
+    for i in range(0,len(population)):
+	  population[i] =   
+
+
     pass

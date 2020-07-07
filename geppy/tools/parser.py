@@ -11,6 +11,13 @@ lambda function in Python for subsequent fitness evaluation.
 
 import sys
 import operator
+import numpy as np
+
+def trace(x1):
+    
+    if(np.isscalar(x1)):
+        return x1
+    return np.trace(x1)
 
 def _compile_gene(g, pset):
     """
@@ -49,6 +56,9 @@ def _compile_plasmid_gene(g, pset,pset_plasmid):
         globs.update(pset_plasmid.globals)
 # Here add mult function for linker because input set might not always have one
         globs.update({'mul':operator.mul})
+        globs.update({'trace':trace})
+
+
         return eval(code, globs, {})
     except MemoryError:
         _, _, traceback = sys.exc_info()

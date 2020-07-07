@@ -492,14 +492,16 @@ class GenePlasmid(Gene):
         # generate the rnc array
         self._rnc_array = [self._rnc_gen() for _ in range(rnc_array_length)]
         # Add plasmid
-        dc_plasmid = generate_dc(n_plasmid, n_plasmid)      
+        dc_plasmid = [i for i in range(0,n_plasmid)]      
         self.extend(dc_plasmid)
         self._n_plasmid = n_plasmid 
         self._plasmid_const = dc_plasmid
         self._head_plasmid = head_plasmid
         self._tail_plasmid = head_plasmid*(pset_plasmid.max_arity-1) + 1
-        #self._plasmid_array = [generate_genome(pset_plasmid, head_plasmid) for _ in range(n_plasmid)]
-        #self._plasmid_array = [Gene(pset_plasmid, head_plasmid) for _ in range(n_plasmid)]
+# Plasmid starts at head+tail+dc
+        self._plasmid_start = head_length+t+t 
+#        self._plasmid_array = [generate_genome(pset_plasmid, head_plasmid) for _ in range(n_plasmid)]
+#        self._plasmid_array = [Gene(pset_plasmid, head_plasmid) for _ in range(n_plasmid)]
         self._plasmid_array = [GeneDc(pset_plasmid, head_plasmid,rnc_gen,rnc_array_length) for _ in range(n_plasmid)]
 
 
@@ -734,7 +736,11 @@ class GenePlasmid(Gene):
                 j += 1
             i += 1
         expr.insert(0,Function('mul',2))
-        expr.insert(1,PlasmidTerminalType("trace("+str(self.plasmid_array[0])+")", self.plasmid_array[0]))
+# Okay so I am considering that we have only one plasmid
+# So this will always be the first number in the list
+# But that number might change due to mutation which ensures variation
+        index_plasmid = self[self._plasmid_start]
+        expr.insert(1,PlasmidTerminalType("trace("+str(self.plasmid_array[index_plasmid])+")", self.plasmid_array[index_plasmid]))
         return expr
 
 

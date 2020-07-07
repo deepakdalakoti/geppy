@@ -10,8 +10,9 @@ can be used as a reference.
 import deap
 import random
 import warnings
-
-
+from ..tools.mutation import mutate_uniform_new, mutate_uniform, mutate_uniform_gene_plasmid, mutate_uniform_dc_new
+from ..core.entity import GeneDc, GenePlasmid
+import copy
 def _validate_basic_toolbox(tb):
     """
     Validate the operators in the toolbox *tb* according to our conventions.
@@ -53,7 +54,7 @@ def _apply_crossover(population, operator, pb):
     return population
 
 
-def gep_simple(population, toolbox, n_generations=100, n_elites=1,
+def gep_simple(population, toolbox, do_hill=False, niter=2, nmut=1, nfreq=1,pop_frac=0.5,n_generations=100, n_elites=1,
                stats=None, hall_of_fame=None, verbose=__debug__):
     """
     This algorithm performs the simplest and standard gene expression programming.
@@ -121,7 +122,9 @@ def gep_simple(population, toolbox, n_generations=100, n_elites=1,
         # mutation
         for op in toolbox.pbs:
             if op.startswith('mut'):
-                offspring = _apply_modification(offspring, getattr(toolbox, op), toolbox.pbs[op])
+                    if(gen%2 and op=='mut_unif_plasmid'):
+                          continue     
+                    offspring = _apply_modification(offspring, getattr(toolbox, op), toolbox.pbs[op])
 
         # crossover
         for op in toolbox.pbs:
@@ -131,90 +134,68 @@ def gep_simple(population, toolbox, n_generations=100, n_elites=1,
         # replace the current population with the offsprings
         population = elites + offspring
 
+
+        if(do_hill and not gen%nfreq):
+             if(isinstance(population[0][0], GeneDc)):
+                _ = do_hill_climb(population,niter,toolbox, n_elites,nmut, pop_frac)
+             if(isinstance(population[0][0], GenePlasmid)):
+                _ = do_hill_climb_plasmid(population,niter,toolbox, n_elites,nmut, pop_frac)
+     
     return population, logbook
 
-def gep_plasmid(population, toolbox, n_generations=100, n_elites=1,
-               stats=None, hall_of_fame=None, verbose=__debug__):
-    """
-    This algorithm performs the simplest and standard gene expression programming.
-    The flowchart of this algorithm can be found
-    `here <https://www.gepsoft.com/gxpt4kb/Chapter06/Section1/SS1.htm>`_.
-    Refer to Chapter 3 of [FC2006]_ to learn more about this basic algorithm.
+def do_hill_climb(population, niter, toolbox, n_elites,nmut, pop_frac):
+    pset = getattr(toolbox,'gene_gen').keywords['pset']
+    for i in range(0,len(population)):
+         if(random.random() > pop_frac):
+            continue
+         nbrs = [copy.deepcopy(population[i])]
+         for j in range(0,niter):
+              tchrom = copy.deepcopy(population[i])
+              p, = mutate_uniform_new(tchrom,pset,nmut)
+              nbrs.append(copy.deepcopy(p))
+#         print("HILL",i,[nbrs])
+         fitnesses = list(toolbox.map(toolbox.evaluate, nbrs))
+#         print(fitnesses.index(min(fitnesses)),fitnesses)
+         #print(nbrs[0],nbrs[1])
+         population[i] = copy.deepcopy(nbrs[fitnesses.index(min(fitnesses))])
+         population[i].fitness.values = min(fitnesses)
+         #del population[i].fitness.values
 
-    .. note::
-        The algorithm framework also supports the GEP-RNC algorithm, which evolves genes with an additional Dc domain for
-        random numerical constant manipulation. To adopt :func:`gep_simple` for GEP-RNC evolution, use the
-        :class:`~geppy.core.entity.GeneDc` objects as the genes and register Dc-specific operators.
-        A detailed example of GEP-RNC can be found at `numerical expression inference with GEP-RNC
-        <https://github.com/ShuhuaGao/geppy/blob/master/examples/sr/numerical_expression_inference-RNC.ipynb>`_.
-        Users can refer to Chapter 5 of [FC2006]_ to get familiar with the GEP-RNC theory.
+#    offspring = deap.tools.selBest(population, len(population) - n_elites)
+#    offspring = [toolbox.clone(ind) for ind in offspring]
 
-    :param population: a list of individuals
-    :param toolbox: :class:`~geppy.tools.toolbox.Toolbox`, a container of operators. Regarding the conventions of
-        operator design and registration, please refer to :ref:`convention`.
-    :param n_generations: max number of generations to be evolved
-    :param n_elites: number of elites to be cloned to next generation
-    :param stats: a :class:`~deap.tools.Statistics` object that is updated
-                  inplace, optional.
-    :param hall_of_fame: a :class:`~deap.tools.HallOfFame` object that will
-                       contain the best individuals, optional.
-    :param verbose: whether or not to print the statistics.
-    :returns: The final population
-    :returns: A :class:`~deap.tools.Logbook` recording the statistics of the
-              evolution process
+    return population
 
-    .. note:
-        To implement the GEP-RNC algorithm for numerical constant evolution, the :class:`geppy.core.entity.GeneDc` genes
-        should be used. Specific operators are used to evolve the Dc domain of :class:`~geppy.core.entity.GeneDc` genes
-        including Dc-specific mutation/inversion/transposition and direct mutation of the RNC array associated with
-        each gene. These operators should be registered into the *toolbox*.
-    """
-    _validate_basic_toolbox(toolbox)
-    logbook = deap.tools.Logbook()
-    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+def do_hill_climb_plasmid(population, niter, toolbox, n_elites,nmut, pop_frac):
+    pset = getattr(toolbox,'gene_gen').keywords['pset']
+    pset_plasmid = getattr(toolbox,'gene_gen').keywords['pset_plasmid']
+    for i in range(0,len(population)):
+         if(random.random() > pop_frac):
+            continue
+         nbrs = [copy.deepcopy(population[i])]
+         for j in range(0,niter):
+              tchrom = copy.deepcopy(population[i])
+              if(random.random() < 0.5):
+	              p, = mutate_uniform_gene_plasmid(tchrom,pset,pset_plasmid,nmut)
+        	      nbrs.append(copy.deepcopy(p))
+              else:
+	              p, = mutate_uniform_dc_new(tchrom,1)
+        	      nbrs.append(copy.deepcopy(p))
+#         print("HILL",i,[nbrs])
+         fitnesses = list(toolbox.map(toolbox.evaluate, nbrs))
+#         print(fitnesses.index(min(fitnesses)),fitnesses)
+         #print(nbrs[0],nbrs[1])
+         population[i] = copy.deepcopy(nbrs[fitnesses.index(min(fitnesses))])
+         population[i].fitness.values = min(fitnesses)
+         #del population[i].fitness.values
 
-    for gen in range(n_generations + 1):
-        # evaluate: only evaluate the invalid ones, i.e., no need to reevaluate the unchanged ones
-        invalid_individuals = [ind for ind in population if not ind.fitness.valid]
-        fitnesses = toolbox.map(toolbox.evaluate, invalid_individuals)
-        for ind, fit in zip(invalid_individuals, fitnesses):
-            ind.fitness.values = fit
+#    offspring = deap.tools.selBest(population, len(population) - n_elites)
+#    offspring = [toolbox.clone(ind) for ind in offspring]
 
-        # record statistics and log
-        if hall_of_fame is not None:
-            hall_of_fame.update(population)
-        record = stats.compile(population) if stats else {}
-        logbook.record(gen=gen, nevals=len(invalid_individuals), **record)
-        if verbose:
-            print(logbook.stream)
-
-        if gen == n_generations:
-            break
-
-        # selection with elitism
-        elites = deap.tools.selBest(population, k=n_elites)
-        offspring = toolbox.select(population, len(population) - n_elites)
-
-        # replication
-        offspring = [toolbox.clone(ind) for ind in offspring]
-
-        # mutation
-        for op in toolbox.pbs:
-            if op.startswith('mut'):
-                offspring = _apply_modification(offspring, getattr(toolbox, op), toolbox.pbs[op])
-
-        # crossover
-        for op in toolbox.pbs:
-            if op.startswith('cx'):
-                offspring = _apply_crossover(offspring, getattr(toolbox, op), toolbox.pbs[op])
-
-        # replace the current population with the offsprings
-        population = elites + offspring
-
-    return population, logbook
+    return population
 
 
 
-__all__ = ['gep_plasmid','gep_simple']
+__all__ = ['gep_simple']
 
 

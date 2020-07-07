@@ -79,6 +79,7 @@ def _simplify_kexpression(expr, symbolic_function_map):
                 else:
                     args.append(t)
             # evaluate this function node symbolically
+            print(args)
             r = sym_func(*reversed(args))
             expr[i] = sp.simplify(r)
     return expr[0]
